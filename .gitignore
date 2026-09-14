@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Database (regenerate with `python seed.py`)
+backend/hospital.db
+backend/hospital.db-wal
+backend/hospital.db-shm
+*.db
+*.db-wal
+*.db-shm
+
+# Node / frontend build
+node_modules/
+dist/
+dist-electron/
+.vite/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

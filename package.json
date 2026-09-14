@@ -1,0 +1,42 @@
+{
+  "name": "hospital-capacity-control-center",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Windows-desktop hospital capacity & patient flow control center (Electron + React + FastAPI + SQLite)",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n api,web,electron -c blue,green,magenta \"npm:dev:api\" \"npm:dev:web\" \"npm:dev:electron\"",
+    "dev:api": ".venv\\Scripts\\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000",
+    "dev:web": "vite",
+    "dev:electron": "wait-on tcp:127.0.0.1:5173 && electron .",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "start": "electron .",
+    "start:prod": "set APP_ENV=production&& electron .",
+    "seed": ".venv\\Scripts\\python.exe seed.py",
+    "test": ".venv\\Scripts\\python.exe -m pytest tests -v"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.62.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.469.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
+    "electron": "^33.2.1",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "wait-on": "^8.0.1"
+  }
+}
