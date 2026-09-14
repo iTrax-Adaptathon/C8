@@ -9,6 +9,23 @@ Built as a hackathon MVP with **Electron + React + Vite (TypeScript) + FastAPI +
 
 ---
 
+## 🚑 What is MedFlow?
+
+MedFlow is a hospital operations control center designed to help staff answer five questions in real time:
+
+**What capacity do we have?**  
+**Who is waiting?**  
+**What should happen next?**  
+**Can we allocate the resource safely?**  
+**Can we prove what happened afterward?**
+
+It connects capacity visibility, patient flow, explainable resource matching, safe allocation, and complete traceability in one operational workflow.
+
+### The MedFlow Flow
+
+**SEE → UNDERSTAND → RECOMMEND → ALLOCATE SAFELY → TRACE**
+
+---
 ## The four outcomes this MVP demonstrates
 
 1. **Visibility** — live dashboard of bed / theatre / staff capacity and the waiting queue.
