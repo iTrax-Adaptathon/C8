@@ -42,23 +42,23 @@ It connects capacity visibility, patient flow, explainable resource matching, sa
 
 ### Operations & Capacity Overview
 
-![MedFlow Operations Overview](docs/screenshots/overview.png)
+![MedFlow Operations Overview](screenshots/overview.png)
 
 ### Live Hospital Operations Dashboard
 
-![MedFlow Dashboard](docs/screenshots/home.png)
+![MedFlow Dashboard](screenshots/home.png)
 
 ### Patient Registry
 
-![MedFlow Patient Registry](docs/screenshots/patients.png)
+![MedFlow Patient Registry](screenshots/patients.png)
 
 ### Add Patient Workflow
 
-![MedFlow Add Patient](docs/screenshots/add-patient.png)
+![MedFlow Add Patient](screenshots/add-patient.png)
 
 ### Audit Trail
 
-![MedFlow Audit Trail](docs/screenshots/audit-trail.png)
+![MedFlow Audit Trail](screenshots/audit-trail.png)
 ## Architecture
 
 ```
