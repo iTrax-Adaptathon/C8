@@ -9,7 +9,7 @@ Built as a hackathon MVP with **Electron + React + Vite (TypeScript) + FastAPI +
 
 ---
 
-## 🚑 What is MedFlow?
+## What is MedFlow?
 
 MedFlow is a hospital operations control center designed to help staff answer five questions in real time:
 
