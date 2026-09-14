@@ -38,27 +38,6 @@ It connects capacity visibility, patient flow, explainable resource matching, sa
 
 ---
 
-## 📸 MedFlow in Action
-
-### Operations & Capacity Overview
-
-![MedFlow Operations Overview](screenshots/overview.png)
-
-### Live Hospital Operations Dashboard
-
-![MedFlow Dashboard](screenshots/home.png)
-
-### Patient Registry
-
-![MedFlow Patient Registry](screenshots/patients.png)
-
-### Add Patient Workflow
-
-![MedFlow Add Patient](screenshots/add-patient.png)
-
-### Audit Trail
-
-![MedFlow Audit Trail](screenshots/audit-trail.png)
 ## Architecture
 
 ```
@@ -342,3 +321,28 @@ See `TODO.md` for the full list and next-team ideas.
 | Electron opens a blank window    | Vite not up yet, or `dist/` missing for `start:prod` (`npm run build`). |
 | `database is locked`             | Ensure only one backend writer; WAL + 30 s busy timeout are configured. |
 | Stale demo data                  | Re-run `seed.py`.                                                        |
+
+--- 
+
+## MedFlow in Action
+
+### Operations & Capacity Overview
+
+![MedFlow Operations Overview](screenshots/overview.png)
+
+### Live Hospital Operations Dashboard
+
+![MedFlow Dashboard](screenshots/home.png)
+
+### Patient Registry
+
+![MedFlow Patient Registry](screenshots/patients.png)
+
+### Add Patient Workflow
+
+![MedFlow Add Patient](screenshots/add-patient.png)
+
+### Audit Trail
+
+![MedFlow Audit Trail](screenshots/audit-trail.png)
+
