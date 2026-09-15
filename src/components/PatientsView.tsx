@@ -1,18 +1,38 @@
-import { Plus, Users } from "lucide-react";
 import { useState } from "react";
+import {
+  AlertCircle,
+  Bed,
+  Check,
+  CheckCircle2,
+  Clock,
+  LogOut,
+  Plus,
+  ArrowRight,
+  UserCheck,
+  Users,
+} from "lucide-react";
 
-import { usePatients, useResources } from "../hooks/useHospitalData";
+import {
+  useAllocate,
+  useDischarge,
+  useMarkDischargePending,
+  usePatients,
+  useResources,
+} from "../hooks/useHospitalData";
 import { cn, formatDateTime, humanWait, minutesSince, patientCode, urgencyTone } from "../lib/utils";
-import type { PatientStatus } from "../types/hospital";
+import type { Patient, PatientStatus, SeverityLevel } from "../types/hospital";
 import { StatusPill } from "./StatusPill";
 
-type FilterKey = "all" | "admitted" | "waiting" | "discharge";
+type FilterKey = "all" | "en_route" | "waiting" | "reserved" | "admitted" | "discharge_pending" | "discharged";
 
-const FILTERS: { key: FilterKey; label: string; match: (status: PatientStatus) => boolean }[] = [
-  { key: "all", label: "All", match: () => true },
-  { key: "admitted", label: "Admitted", match: (status) => status === "admitted" },
-  { key: "waiting", label: "Waiting", match: (status) => status === "waiting" },
-  { key: "discharge", label: "Discharge", match: (status) => status === "discharged" },
+const FLOW_STAGES: { key: FilterKey; label: string; match: (s: PatientStatus) => boolean }[] = [
+  { key: "all", label: "All Patients", match: () => true },
+  { key: "en_route", label: "En Route", match: (s) => s === "en_route" },
+  { key: "waiting", label: "Waiting", match: (s) => s === "waiting" || s === "arrived" },
+  { key: "reserved", label: "Reserved", match: (s) => s === "reserved" },
+  { key: "admitted", label: "Admitted", match: (s) => s === "admitted" },
+  { key: "discharge_pending", label: "Discharge Pending", match: (s) => s === "discharge_pending" },
+  { key: "discharged", label: "Discharged", match: (s) => s === "discharged" },
 ];
 
 export function PatientsView({
@@ -26,126 +46,211 @@ export function PatientsView({
   const { data: resources = [] } = useResources();
   const [filter, setFilter] = useState<FilterKey>("all");
 
-  const activeFilter = FILTERS.find((item) => item.key === filter) ?? FILTERS[0];
+  const { mutate: markDischargePending, isPending: isPendingDP } = useMarkDischargePending();
+  const { mutate: dischargePatient, isPending: isPendingDC } = useDischarge();
+  const { mutate: allocatePatient, isPending: isPendingAlloc } = useAllocate();
+
+  const activeFilter = FLOW_STAGES.find((item) => item.key === filter) ?? FLOW_STAGES[0];
   const visible = patients.filter((patient) => activeFilter.match(patient.status));
 
   const resourceName = (id: number | null) =>
     resources.find((resource) => resource.id === id)?.name ?? "—";
 
   return (
-    <section className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <section className="space-y-6 pb-12">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
         <div>
-          <p className="label-muted mb-1">Patient registry</p>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              Patients
-            </h1>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-              {patients.length} total
-            </span>
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-600">
+            <ArrowRight size={15} /> Patient Journey &amp; Clinical Flow
           </div>
-          <p className="mt-1 text-sm text-slate-500">
-            Every patient ever registered, including discharged and removed from the queue.
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Patient Flow Management
+          </h1>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Track patient progression through each stage from incoming transport to discharge.
           </p>
         </div>
-        <button className="btn-primary" onClick={onAddPatient}>
-          <Plus size={16} /> Add Patient
+        <button
+          onClick={onAddPatient}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+        >
+          <Plus size={14} /> Add Patient
         </button>
       </div>
 
-      <div className="card">
-        <div className="mb-4 flex flex-wrap items-center gap-1.5">
-          {FILTERS.map((item) => {
-            const count = patients.filter((patient) => item.match(patient.status)).length;
-            return (
-              <button
-                key={item.key}
-                onClick={() => setFilter(item.key)}
+      {/* Stage Filter Pills */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200/80 pb-3">
+        {FLOW_STAGES.map((item) => {
+          const count = patients.filter((p) => item.match(p.status)).length;
+          return (
+            <button
+              key={item.key}
+              onClick={() => setFilter(item.key)}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5",
+                filter === item.key
+                  ? "bg-blue-600 text-white font-semibold"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+              )}
+            >
+              {item.label}
+              <span
                 className={cn(
-                  "rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
-                  filter === item.key
-                    ? "bg-teal-600 text-white"
-                    : "bg-slate-100 text-slate-500 hover:bg-slate-200",
+                  "rounded-md px-1.5 py-0.2 text-[11px] font-semibold",
+                  filter === item.key ? "bg-white/20 text-white" : "bg-white text-slate-600",
                 )}
               >
-                {item.label}
-                <span
-                  className={cn(
-                    "ml-1.5 rounded-full px-1.5 text-[11px] font-semibold",
-                    filter === item.key ? "bg-white/20 text-white" : "bg-white text-slate-500",
-                  )}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
+      {/* Table */}
+      <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-xs">
         {isLoading ? (
           <div className="space-y-2">
             {[0, 1, 2, 3].map((row) => (
-              <div key={row} className="h-12 animate-pulse rounded-xl bg-slate-100" />
+              <div key={row} className="h-12 animate-pulse rounded-lg bg-slate-100" />
             ))}
           </div>
         ) : visible.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-10 text-center">
-            <Users size={20} className="text-slate-300" />
-            <p className="text-sm text-slate-500">No patients match this filter.</p>
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-200 py-12 text-center text-sm text-slate-500">
+            <Users size={24} className="text-slate-300" />
+            <p>No patients currently in this stage.</p>
           </div>
         ) : (
-          <div className="-mx-2 overflow-x-auto">
-            <table className="w-full min-w-[720px] border-separate border-spacing-y-1 px-2">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
               <thead>
-                <tr className="text-left">
-                  <th className="label-muted px-2 pb-1">Patient</th>
-                  <th className="label-muted px-2 pb-1">Needs</th>
-                  <th className="label-muted px-2 pb-1">Urgency</th>
-                  <th className="label-muted px-2 pb-1">Assigned resource</th>
-                  <th className="label-muted px-2 pb-1">Waiting</th>
-                  <th className="label-muted px-2 pb-1 text-right">Status</th>
+                <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  <th className="pb-3">Patient</th>
+                  <th className="pb-3">Stage / Status</th>
+                  <th className="pb-3">Severity &amp; Acuity</th>
+                  <th className="pb-3">Requirement</th>
+                  <th className="pb-3">Assigned Bed / Resource</th>
+                  <th className="pb-3">Waiting Time</th>
+                  <th className="pb-3 text-right">Care Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {visible.map((patient) => (
-                  <tr
-                    key={patient.id}
-                    onClick={() => onViewPatient(patient.id)}
-                    className="cursor-pointer bg-slate-50/70 transition-colors hover:bg-teal-50/70"
-                  >
-                    <td className="rounded-l-xl px-2 py-2.5">
-                      <p className="text-sm font-semibold text-slate-800">{patient.name}</p>
-                      <p className="text-xs text-slate-400">{patientCode(patient.id)}</p>
-                    </td>
-                    <td className="px-2 py-2.5">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium capitalize text-slate-600">
-                        {patient.resource_type_needed}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2.5">
-                      <span
-                        className={cn(
-                          "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1",
-                          urgencyTone(patient.urgency_score),
-                        )}
+              <tbody className="divide-y divide-slate-100">
+                {visible.map((patient) => {
+                  const waitMinutes = patient.waiting_minutes ?? minutesSince(patient.waiting_since);
+                  const isCriticalWait = patient.severity === "Critical" && waitMinutes >= 15;
+
+                  return (
+                    <tr
+                      key={patient.id}
+                      className="hover:bg-slate-50/70 transition-colors"
+                    >
+                      <td
+                        className="py-3 cursor-pointer"
+                        onClick={() => onViewPatient(patient.id)}
                       >
-                        {patient.urgency_score}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2.5 text-sm text-slate-600">
-                      {resourceName(patient.current_resource_id)}
-                    </td>
-                    <td className="px-2 py-2.5 text-sm text-slate-600">
-                      {patient.status === "waiting"
-                        ? humanWait(minutesSince(patient.waiting_since))
-                        : formatDateTime(patient.waiting_since)}
-                    </td>
-                    <td className="rounded-r-xl px-2 py-2.5 text-right">
-                      <StatusPill status={patient.status} />
-                    </td>
-                  </tr>
-                ))}
+                        <p className="font-semibold text-slate-900 hover:text-blue-600">
+                          {patient.name}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {patientCode(patient.id)}
+                          {patient.ambulance_id && ` • Amb ${patient.ambulance_id}`}
+                        </p>
+                      </td>
+                      <td className="py-3">
+                        <StatusPill status={patient.status} />
+                      </td>
+                      <td className="py-3">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={cn(
+                              "rounded-md px-2 py-0.5 text-xs font-semibold",
+                              patient.severity === "Critical" && "bg-rose-100 text-rose-800",
+                              patient.severity === "High" && "bg-amber-100 text-amber-800",
+                              patient.severity === "Medium" && "bg-yellow-100 text-yellow-800",
+                              patient.severity === "Low" && "bg-slate-100 text-slate-800",
+                            )}
+                          >
+                            {patient.severity ?? "Medium"}
+                          </span>
+                          <span className="text-xs text-slate-400">Score {patient.urgency_score}</span>
+                        </div>
+                      </td>
+                      <td className="py-3">
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium uppercase text-slate-700">
+                          {patient.resource_type_needed}
+                        </span>
+                        {patient.department && (
+                          <span className="ml-1 text-xs text-slate-400">({patient.department})</span>
+                        )}
+                      </td>
+                      <td className="py-3 font-medium text-slate-800">
+                        {resourceName(patient.current_resource_id)}
+                      </td>
+                      <td className="py-3">
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 text-xs font-medium",
+                            isCriticalWait ? "text-rose-600 font-bold" : "text-slate-600",
+                          )}
+                        >
+                          <Clock size={12} />
+                          {patient.status === "waiting" || patient.status === "en_route"
+                            ? humanWait(waitMinutes)
+                            : "Admitted"}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <div className="inline-flex items-center gap-1">
+                          {/* If Reserved: Admit Button */}
+                          {patient.status === "reserved" && patient.current_resource_id && (
+                            <button
+                              onClick={() =>
+                                allocatePatient({
+                                  resourceId: patient.current_resource_id!,
+                                  patientId: patient.id,
+                                })
+                              }
+                              disabled={isPendingAlloc}
+                              className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700"
+                            >
+                              Admit
+                            </button>
+                          )}
+
+                          {/* If Admitted: Discharge Pending */}
+                          {patient.status === "admitted" && (
+                            <button
+                              onClick={() => markDischargePending({ patientId: patient.id })}
+                              disabled={isPendingDP}
+                              className="rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                            >
+                              Discharge Pending
+                            </button>
+                          )}
+
+                          {/* If Discharge Pending or Admitted: Discharge */}
+                          {(patient.status === "discharge_pending" || patient.status === "admitted") && (
+                            <button
+                              onClick={() => dischargePatient({ patientId: patient.id })}
+                              disabled={isPendingDC}
+                              className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                              title="Discharge patient and release occupied resource"
+                            >
+                              Discharge &amp; Free Bed
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => onViewPatient(patient.id)}
+                            className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                          >
+                            History
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

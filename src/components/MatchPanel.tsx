@@ -1,20 +1,20 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Loader2, Sparkles, UserCheck } from "lucide-react";
 import { useState } from "react";
 
-import { useAllocate, useMatches } from "../hooks/useHospitalData";
+import { useAllocate, useMatches, useReserveResource } from "../hooks/useHospitalData";
 import { cn, patientCode } from "../lib/utils";
 import type { MatchRecommendation, MatchReason } from "../types/hospital";
 
 function ReasonList({ reasons }: { reasons: MatchReason[] }) {
   return (
-    <ul className="space-y-1.5">
+    <ul className="space-y-1.5 pt-1">
       {reasons.map((reason) => (
-        <li key={reason.label} className="flex items-start gap-2 text-sm">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-          <span>
-            <span className="font-medium text-slate-700">{reason.label}</span>
-            <span className="text-slate-500"> · {reason.detail}</span>
-          </span>
+        <li key={reason.label} className="flex items-start gap-2 text-xs leading-relaxed">
+          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+          <div>
+            <span className="font-semibold text-slate-800">{reason.label}</span>:{" "}
+            <span className="text-slate-600">{reason.detail}</span>
+          </div>
         </li>
       ))}
     </ul>
@@ -24,19 +24,40 @@ function ReasonList({ reasons }: { reasons: MatchReason[] }) {
 export function MatchPanel({ onViewPatient }: { onViewPatient: (id: number) => void }) {
   const { data: matches = [] } = useMatches();
   const allocate = useAllocate();
+  const reserve = useReserveResource();
+
   const [pendingId, setPendingId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<
     Record<number, { tone: "ok" | "err"; text: string }>
   >({});
 
+  async function handleReserve(recommendation: MatchRecommendation) {
+    const resourceId = recommendation.resource_id;
+    setPendingId(resourceId);
+    try {
+      const result = await reserve.mutateAsync({
+        resourceId,
+        patientId: recommendation.patient_id,
+        reason: `Matched & reserved via recommendation engine.`,
+      });
+      setFeedback((current) => ({
+        ...current,
+        [resourceId]: { tone: "ok", text: result.message },
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Reservation failed.";
+      setFeedback((current) => ({
+        ...current,
+        [resourceId]: { tone: "err", text: message },
+      }));
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   async function handleAllocate(recommendation: MatchRecommendation) {
     const resourceId = recommendation.resource_id;
     setPendingId(resourceId);
-    setFeedback((current) => {
-      const next = { ...current };
-      delete next[resourceId];
-      return next;
-    });
     try {
       const result = await allocate.mutateAsync({
         resourceId,
@@ -61,120 +82,83 @@ export function MatchPanel({ onViewPatient }: { onViewPatient: (id: number) => v
   const rest = matches.slice(1);
 
   return (
-    <section className="card">
+    <section className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-xs">
       <div className="mb-4 flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-teal-50 text-teal-600">
+        <div className="grid h-8 w-8 place-items-center rounded-lg bg-blue-50 text-blue-600">
           <Sparkles size={16} />
-        </span>
+        </div>
         <div>
-          <h2 className="text-sm font-semibold text-slate-800">Recommended Match</h2>
-          <p className="text-xs text-slate-400">Explainable matching · urgency first, wait time second</p>
+          <h2 className="text-sm font-bold text-slate-900">Explainable Matching Recommendation</h2>
+          <p className="text-xs text-slate-500">
+            Multi-criteria matching: Acuity → Wait Time → Qualified Staff → Arrival Window
+          </p>
         </div>
       </div>
 
       {!primary ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center">
-          <p className="text-sm font-medium text-slate-600">No match available right now</p>
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center">
+          <p className="text-sm font-medium text-slate-600">No active match available right now</p>
           <p className="mt-1 text-xs text-slate-400">
-            A recommendation appears when a waiting patient and a compatible available
-            resource line up.
+            Recommendations appear when queued patients and compatible resources align with verified qualified staff.
           </p>
         </div>
       ) : (
-        <div className="animate-fade-slide rounded-2xl bg-gradient-to-br from-teal-50 to-white p-5 ring-1 ring-teal-100">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 shadow-sm ring-1 ring-slate-100">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-teal-600 text-xs font-bold text-white">
-                {patientCode(primary.patient_id).slice(1)}
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-slate-800">{primary.patient_name}</p>
-                <p className="text-xs text-slate-400">{patientCode(primary.patient_id)}</p>
+        <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4.5 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="rounded-lg bg-white px-3 py-1.5 shadow-xs border border-slate-200">
+                <p className="text-xs font-bold text-slate-900">{primary.patient_name}</p>
+                <p className="text-[11px] text-slate-400">
+                  {patientCode(primary.patient_id)} • Severity {primary.severity ?? "Medium"}
+                </p>
+              </div>
+              <ArrowRight className="text-blue-500" size={16} />
+              <div className="rounded-lg bg-white px-3 py-1.5 shadow-xs border border-slate-200">
+                <p className="text-xs font-bold text-slate-900">{primary.resource_name}</p>
+                <p className="text-[11px] capitalize text-slate-400">
+                  {primary.resource_type} • Available
+                </p>
               </div>
             </div>
-            <ArrowRight className="text-teal-500" size={18} />
-            <div className="rounded-xl bg-white px-3 py-2 shadow-sm ring-1 ring-slate-100">
-              <p className="text-sm font-semibold text-slate-800">{primary.resource_name}</p>
-              <p className="text-xs capitalize text-slate-400">
-                {primary.resource_type} · available
-              </p>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleReserve(primary)}
+                disabled={pendingId === primary.resource_id}
+                className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-xs hover:bg-blue-50 disabled:opacity-50"
+              >
+                Pre-Reserve
+              </button>
+              <button
+                onClick={() => handleAllocate(primary)}
+                disabled={pendingId === primary.resource_id}
+                className="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+              >
+                {pendingId === primary.resource_id && <Loader2 size={12} className="animate-spin" />}
+                Confirm Allocation
+              </button>
             </div>
-          </div>
-
-          <div className="mt-4">
-            <ReasonList reasons={primary.reasons} />
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button
-              className="btn-primary"
-              disabled={pendingId === primary.resource_id}
-              onClick={() => handleAllocate(primary)}
-            >
-              {pendingId === primary.resource_id ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <CheckCircle2 size={16} />
-              )}
-              Allocate
-            </button>
-            <button className="btn-ghost" onClick={() => onViewPatient(primary.patient_id)}>
-              View history
-            </button>
           </div>
 
           {feedback[primary.resource_id] && (
-            <p
+            <div
               className={cn(
-                "mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
+                "rounded-lg p-2.5 text-xs font-medium",
                 feedback[primary.resource_id].tone === "ok"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-red-50 text-red-700",
+                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                  : "bg-rose-50 text-rose-800 border border-rose-200",
               )}
             >
-              {feedback[primary.resource_id].tone === "err" && (
-                <AlertTriangle size={15} className="shrink-0" />
-              )}
               {feedback[primary.resource_id].text}
-            </p>
+            </div>
           )}
-        </div>
-      )}
 
-      {rest.length > 0 && (
-        <div className="mt-4">
-          <p className="label-muted mb-2">More recommendations</p>
-          <div className="space-y-2">
-            {rest.map((recommendation) => (
-              <div
-                key={recommendation.resource_id}
-                className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-100"
-              >
-                <button
-                  className="min-w-0 text-left"
-                  onClick={() => onViewPatient(recommendation.patient_id)}
-                >
-                  <p className="truncate text-sm font-medium text-slate-700">
-                    {recommendation.patient_name}{" "}
-                    <span className="text-slate-400">→ {recommendation.resource_name}</span>
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    urgency {recommendation.urgency_score} · waiting{" "}
-                    {recommendation.waiting_minutes} min
-                  </p>
-                </button>
-                <button
-                  className="btn-ghost shrink-0 !px-3 !py-1.5 text-xs"
-                  disabled={pendingId === recommendation.resource_id}
-                  onClick={() => handleAllocate(recommendation)}
-                >
-                  {pendingId === recommendation.resource_id ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : null}
-                  Allocate
-                </button>
-              </div>
-            ))}
+          {/* Explainable Checklist */}
+          <div className="rounded-lg bg-white p-3.5 border border-slate-100 shadow-2xs">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              Why this recommendation:
+            </h4>
+            <ReasonList reasons={primary.reasons} />
           </div>
         </div>
       )}

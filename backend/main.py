@@ -9,7 +9,17 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api.routers import allocations, events, health, matches, patients, resources
+from backend.api.routers import (
+    allocations,
+    ambulances,
+    dashboard,
+    events,
+    health,
+    matches,
+    patients,
+    resources,
+    theatres,
+)
 from backend.database import init_db
 from backend.errors import AppError
 
@@ -52,8 +62,11 @@ def root():
 
 for router in (
     health.router,
+    dashboard.router,
+    ambulances.router,
     resources.router,
     patients.router,
+    theatres.router,
     matches.router,
     allocations.router,
     events.router,

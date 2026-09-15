@@ -1,4 +1,4 @@
-"""Service layer: atomic allocation / release orchestration.
+"""Service layer: atomic allocation, reservation, and release orchestration.
 
 The state change and its audit event are written in the SAME transaction.
 """
@@ -14,20 +14,142 @@ from backend.repositories import resource_repository as resource_repo
 from backend.services import matching_service
 
 
-def allocate(
-    db: Session, resource_id: int, patient_id: Optional[int] = None
+def reserve(
+    db: Session,
+    resource_id: int,
+    patient_id: int,
+    staff_name: Optional[str] = None,
+    reason: Optional[str] = None,
 ) -> Dict:
-    """Race-proof allocation.
+    """Race-proof reservation: Available -> Reserved.
 
-    1. Optional fast pre-checks for a clear error message.
-    2. One atomic conditional UPDATE (WHERE status='available').
-    3. rowcount == 1 -> commit state + audit events together.
-       rowcount == 0 -> another request won; raise 409, never fail silently.
+    Guarantees a resource cannot be reserved by two requests simultaneously.
     """
     resource = resource_repo.get_resource(db, resource_id)
     if resource is None:
         raise NotFoundError(f"Resource {resource_id} was not found.")
     if resource.status != "available":
+        raise ConflictError(
+            f"{resource.name} is currently '{resource.status}', not available for reservation."
+        )
+
+    patient = patient_repo.get_patient(db, patient_id)
+    if patient is None:
+        raise NotFoundError(f"Patient {patient_id} was not found.")
+    if patient.status not in ["waiting", "en_route", "arrived"]:
+        raise ConflictError(
+            f"{patient.name} is '{patient.status}', cannot reserve a resource."
+        )
+    if patient.resource_type_needed != resource.type:
+        raise UnprocessableError(
+            f"{resource.name} is a {resource.type}, but {patient.name} needs a "
+            f"{patient.resource_type_needed}."
+        )
+
+    reserved = resource_repo.try_reserve(db, resource_id, patient_id)
+    if not reserved:
+        db.rollback()
+        raise ConflictError(
+            f"{resource.name} was reserved by another request. Reservation rejected (409 conflict)."
+        )
+
+    patient.status = "reserved"
+    patient.current_resource_id = resource_id
+
+    event_repo.add_event(
+        db,
+        "resource_reserved",
+        patient_id=patient.id,
+        resource_id=resource.id,
+        note=reason or f"{resource.name} reserved for {patient.name} ({patient.severity}).",
+    )
+    event_repo.add_event(
+        db,
+        "patient_reserved",
+        patient_id=patient.id,
+        resource_id=resource.id,
+        note=f"{patient.name} status updated to reserved on {resource.name}.",
+    )
+    db.commit()
+    db.refresh(resource)
+    db.refresh(patient)
+
+    return {
+        "resource": resource,
+        "patient": patient,
+        "message": f"{resource.name} reserved for {patient.name}.",
+    }
+
+
+def cancel_reservation(
+    db: Session,
+    resource_id: int,
+    staff_name: Optional[str] = None,
+    reason: Optional[str] = None,
+) -> Dict:
+    """Cancel a reservation and release the resource back to available."""
+    resource = resource_repo.get_resource(db, resource_id)
+    if resource is None:
+        raise NotFoundError(f"Resource {resource_id} was not found.")
+    if resource.status != "reserved":
+        raise ConflictError(f"{resource.name} is not currently reserved.")
+
+    patient_id = resource.reserved_for_patient_id
+    patient = patient_repo.get_patient(db, patient_id) if patient_id else None
+
+    cancelled = resource_repo.try_cancel_reservation(db, resource_id)
+    if not cancelled:
+        db.rollback()
+        raise ConflictError(f"Could not cancel reservation on {resource.name}.")
+
+    if patient is not None and patient.status == "reserved":
+        # Return to en_route if was ambulance, else waiting
+        patient.status = "en_route" if patient.ambulance_id else "waiting"
+        patient.current_resource_id = None
+        event_repo.add_event(
+            db,
+            "patient_waiting",
+            patient_id=patient.id,
+            resource_id=resource.id,
+            note=f"{patient.name} returned to {patient.status} after reservation cancellation.",
+        )
+
+    event_repo.add_event(
+        db,
+        "reservation_cancelled",
+        patient_id=patient.id if patient else None,
+        resource_id=resource.id,
+        note=reason or f"Reservation for {resource.name} was cancelled.",
+    )
+    matching_service.record_trigger(db, resource.type)
+    db.commit()
+    db.refresh(resource)
+    if patient:
+        db.refresh(patient)
+
+    return {
+        "resource": resource,
+        "patient": patient,
+        "message": f"Reservation on {resource.name} cancelled.",
+    }
+
+
+def allocate(
+    db: Session,
+    resource_id: int,
+    patient_id: Optional[int] = None,
+    staff_name: Optional[str] = None,
+    reason: Optional[str] = None,
+) -> Dict:
+    """Race-proof allocation / admission.
+
+    Can commit an available resource, or confirm a pre-reserved resource.
+    Guarantees no double-booking via single atomic conditional UPDATE.
+    """
+    resource = resource_repo.get_resource(db, resource_id)
+    if resource is None:
+        raise NotFoundError(f"Resource {resource_id} was not found.")
+    if resource.status not in ["available", "reserved"]:
         raise ConflictError(
             f"{resource.name} is already committed. Allocation rejected."
         )
@@ -36,14 +158,22 @@ def allocate(
         patient = patient_repo.get_patient(db, patient_id)
         if patient is None:
             raise NotFoundError(f"Patient {patient_id} was not found.")
-        if patient.status != "waiting":
+        if patient.status not in ["waiting", "reserved", "arrived", "en_route"]:
             raise ConflictError(
-                f"{patient.name} is '{patient.status}', not waiting. Allocation rejected."
+                f"{patient.name} is '{patient.status}', not waiting/reserved. Allocation rejected."
             )
         if patient.resource_type_needed != resource.type:
             raise UnprocessableError(
                 f"{resource.name} is a {resource.type}, but {patient.name} needs a "
                 f"{patient.resource_type_needed}."
+            )
+        if (
+            resource.status == "reserved"
+            and resource.reserved_for_patient_id is not None
+            and resource.reserved_for_patient_id != patient.id
+        ):
+            raise ConflictError(
+                f"{resource.name} is reserved for a different patient."
             )
     else:
         candidates = patient_repo.list_waiting_by_type(db, resource.type)
@@ -54,7 +184,7 @@ def allocate(
         patient = candidates[0]
 
     # --- atomic, single-statement commitment ---
-    committed = resource_repo.try_commit(db, resource_id)
+    committed = resource_repo.try_commit(db, resource_id, patient_id=patient.id)
     if not committed:
         db.rollback()
         raise ConflictError(
@@ -71,7 +201,7 @@ def allocate(
         "resource_committed",
         patient_id=patient.id,
         resource_id=resource_id,
-        note=f"{resource.name} committed to {patient.name} "
+        note=reason or f"{resource.name} committed to {patient.name} "
         f"(urgency {patient.urgency_score}, waiting {wait} min).",
     )
     event_repo.add_event(
@@ -93,16 +223,12 @@ def allocate(
 
 
 def release(db: Session, resource_id: int, note: Optional[str] = None):
-    """Release a committed resource back to available (AC-7).
-
-    History is never deleted - a release appends new events and may trigger
-    a fresh matching recommendation.
-    """
+    """Release a committed resource back to available."""
     resource = resource_repo.get_resource(db, resource_id)
     if resource is None:
         raise NotFoundError(f"Resource {resource_id} was not found.")
-    if resource.status != "committed":
-        raise ConflictError(f"{resource.name} is not currently committed.")
+    if resource.status not in ["committed", "reserved"]:
+        raise ConflictError(f"{resource.name} is not currently committed or reserved.")
 
     released = resource_repo.try_release(db, resource_id)
     if not released:
@@ -133,14 +259,34 @@ def release(db: Session, resource_id: int, note: Optional[str] = None):
     return resource
 
 
-def auto_allocate_waiting(db: Session) -> Dict:
-    """Allocate every waiting patient that has a compatible available resource.
+def mark_discharge_pending(
+    db: Session,
+    patient_id: int,
+    staff_name: Optional[str] = None,
+    reason: Optional[str] = None,
+):
+    """Transition admitted patient to discharge pending."""
+    patient = patient_repo.get_patient(db, patient_id)
+    if patient is None:
+        raise NotFoundError(f"Patient {patient_id} was not found.")
+    if patient.status != "admitted":
+        raise ConflictError(f"{patient.name} is '{patient.status}', not admitted.")
 
-    Powers the "Automatic" allocation mode: new arrivals and the existing
-    waiting queue are both drained, best match first (urgency, then wait).
-    Safe to call repeatedly - it is a no-op once the queue or free resources
-    run out.
-    """
+    patient.status = "discharge_pending"
+    event_repo.add_event(
+        db,
+        "discharge_pending",
+        patient_id=patient.id,
+        resource_id=patient.current_resource_id,
+        note=reason or f"Discharge planning started for {patient.name}.",
+    )
+    db.commit()
+    db.refresh(patient)
+    return patient
+
+
+def auto_allocate_waiting(db: Session) -> Dict:
+    """Allocate waiting patients to compatible available resources."""
     targets = [
         (resource.id, resource.type) for resource in resource_repo.list_available(db)
     ]

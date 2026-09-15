@@ -1,7 +1,7 @@
-import { AlertTriangle, ArrowRightLeft, CheckCircle2, Loader2, Lock, LogOut, Unlock } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, CheckCircle2, Loader2, Lock, LogOut, Unlock, Bookmark } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { useAllocate, useDischarge, useRelease, useTransfer } from "../hooks/useHospitalData";
+import { useAllocate, useCancelReservation, useDischarge, useRelease, useReserveResource, useTransfer } from "../hooks/useHospitalData";
 import { cn, humanWait, isIcuBed, isWardBed, minutesSince, patientCode, urgencyTone } from "../lib/utils";
 import type { Patient, Resource } from "../types/hospital";
 import { Modal } from "./Modal";
@@ -23,6 +23,8 @@ export function ResourceModal({
   onViewPatient: (id: number) => void;
 }) {
   const allocate = useAllocate();
+  const reserve = useReserveResource();
+  const cancelReservation = useCancelReservation();
   const release = useRelease();
   const discharge = useDischarge();
   const transfer = useTransfer();
@@ -40,7 +42,6 @@ export function ResourceModal({
     : null;
   const historyPatientId = link?.patientId ?? assignedPatient?.id ?? null;
 
-  // Care path: ICU beds step down to a ward bed, theatre steps down to ICU.
   const targetKind: "ward" | "icu" | null = resource
     ? resource.type === "theatre"
       ? "icu"
@@ -64,21 +65,50 @@ export function ResourceModal({
     setFeedback(null);
     setSelectedPatient(compatible[0]?.id ?? "");
     setSelectedTarget("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource?.id, resource?.status]);
 
   if (!resource) return null;
 
   const pending =
-    allocate.isPending || release.isPending || discharge.isPending || transfer.isPending;
+    allocate.isPending || reserve.isPending || cancelReservation.isPending || release.isPending || discharge.isPending || transfer.isPending;
   const canStepDown = assignedPatient !== null && targetKind !== null;
+
+  async function handleReserve() {
+    setFeedback(null);
+    if (!selectedPatient) return;
+    try {
+      const result = await reserve.mutateAsync({
+        resourceId: resource!.id,
+        patientId: Number(selectedPatient),
+      });
+      setFeedback({ tone: "ok", text: result.message });
+    } catch (error) {
+      setFeedback({
+        tone: "err",
+        text: error instanceof Error ? error.message : "Reservation failed.",
+      });
+    }
+  }
+
+  async function handleCancelReservation() {
+    setFeedback(null);
+    try {
+      const result = await cancelReservation.mutateAsync(resource!.id);
+      setFeedback({ tone: "ok", text: result.message });
+    } catch (error) {
+      setFeedback({
+        tone: "err",
+        text: error instanceof Error ? error.message : "Cancel reservation failed.",
+      });
+    }
+  }
 
   async function handleAllocate() {
     setFeedback(null);
     try {
       const result = await allocate.mutateAsync({
         resourceId: resource!.id,
-        patientId: selectedPatient === "" ? undefined : Number(selectedPatient),
+        patientId: selectedPatient === "" ? (assignedPatient ? assignedPatient.id : undefined) : Number(selectedPatient),
       });
       setLink({ resourceId: resource!.id, patientId: result.patient?.id ?? null });
       setFeedback({ tone: "ok", text: result.message });
@@ -107,7 +137,7 @@ export function ResourceModal({
     if (!assignedPatient) return;
     setFeedback(null);
     try {
-      await discharge.mutateAsync(assignedPatient.id);
+      await discharge.mutateAsync({ patientId: assignedPatient.id });
       setFeedback({ tone: "ok", text: `${assignedPatient.name} discharged.` });
     } catch (error) {
       setFeedback({
@@ -139,7 +169,7 @@ export function ResourceModal({
       open={isOpen}
       onClose={onClose}
       title={resource.name}
-      subtitle={`${resource.type} resource`}
+      subtitle={`${resource.type} resource · ${resource.department ?? "General"}`}
     >
       <div className="mb-4 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-slate-100">
         <div>
@@ -152,14 +182,14 @@ export function ResourceModal({
       {resource.status === "available" ? (
         <div className="space-y-4">
           <div>
-            <label className="label-muted mb-1.5 block">Assign to waiting patient</label>
+            <label className="label-muted mb-1.5 block">Assign to waiting/incoming patient</label>
             {compatible.length === 0 ? (
               <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
                 No waiting patient currently needs a {resource.type}.
               </p>
             ) : (
               <select
-                className="w-full rounded-xl border-0 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 ring-1 ring-slate-200 focus:ring-2 focus:ring-teal-500"
+                className="w-full rounded-xl border-0 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"
                 value={selectedPatient}
                 onChange={(event) =>
                   setSelectedPatient(event.target.value === "" ? "" : Number(event.target.value))
@@ -173,18 +203,45 @@ export function ResourceModal({
               </select>
             )}
           </div>
-          <button
-            className="btn-primary w-full justify-center"
-            disabled={pending || compatible.length === 0}
-            onClick={handleAllocate}
-          >
-            {allocate.isPending ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <Lock size={16} />
-            )}
-            Allocate resource
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+              disabled={pending || compatible.length === 0}
+              onClick={handleReserve}
+            >
+              <Bookmark size={15} /> Pre-Reserve
+            </button>
+            <button
+              className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+              disabled={pending || compatible.length === 0}
+              onClick={handleAllocate}
+            >
+              <Lock size={15} /> Confirm &amp; Admit
+            </button>
+          </div>
+        </div>
+      ) : resource.status === "reserved" ? (
+        <div className="space-y-4">
+          <div className="rounded-xl bg-purple-50 p-4 border border-purple-200 text-xs text-purple-900 space-y-1">
+            <p className="font-bold text-sm">Resource is Currently Reserved</p>
+            <p>Locked for {assignedPatient ? assignedPatient.name : "incoming emergency patient"}.</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+              disabled={pending}
+              onClick={handleAllocate}
+            >
+              <CheckCircle2 size={15} /> Complete Admission
+            </button>
+            <button
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+              disabled={pending}
+              onClick={handleCancelReservation}
+            >
+              <Unlock size={15} /> Cancel Reservation
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -203,21 +260,11 @@ export function ResourceModal({
                   <dd className="font-semibold text-slate-700">{assignedPatient.name}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <dt className="text-slate-400">Status</dt>
-                  <dd className="capitalize text-slate-700">{assignedPatient.status}</dd>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <dt className="text-slate-400">Required resource</dt>
-                  <dd className="capitalize text-slate-700">
-                    {assignedPatient.resource_type_needed}
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <dt className="text-slate-400">Urgency</dt>
+                  <dt className="text-slate-400">Urgency score</dt>
                   <dd>
                     <span
                       className={cn(
-                        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1",
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ring-1",
                         urgencyTone(assignedPatient.urgency_score),
                       )}
                     >
@@ -225,119 +272,42 @@ export function ResourceModal({
                     </span>
                   </dd>
                 </div>
-                {assignedPatient.status === "waiting" && (
-                  <div className="flex items-center justify-between gap-3">
-                    <dt className="text-slate-400">Waiting time</dt>
-                    <dd className="text-slate-700">
-                      {humanWait(minutesSince(assignedPatient.waiting_since))}
-                    </dd>
-                  </div>
-                )}
               </dl>
             ) : (
-              <p className="text-sm text-slate-500">Patient details unavailable</p>
+              <p className="text-sm text-slate-500">Occupied / committed without patient pointer.</p>
             )}
           </div>
-          {assignedPatient && (resource.type === "bed" || resource.type === "theatre") ? (
-            <div className="space-y-3">
+
+          <div className="flex gap-2">
+            {assignedPatient && (
               <button
-                className="btn-primary w-full justify-center"
+                className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
                 disabled={pending}
                 onClick={handleDischarge}
               >
-                {discharge.isPending ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <LogOut size={16} />
-                )}
-                Discharge patient
+                <LogOut size={15} /> Discharge &amp; Free Bed
               </button>
-
-              {canStepDown &&
-                (transferTargets.length === 0 ? (
-                  <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
-                    No available {targetKind === "icu" ? "ICU" : "ward"} bed to discharge to right
-                    now.
-                  </p>
-                ) : (
-                  <div className="space-y-2 rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-slate-100">
-                    <label className="label-muted block">
-                      Discharge to {targetKind === "icu" ? "ICU" : "ward"} bed
-                    </label>
-                    <select
-                      className="w-full rounded-xl border-0 bg-white px-3 py-2.5 text-sm text-slate-700 ring-1 ring-slate-200 focus:ring-2 focus:ring-teal-500"
-                      value={effectiveTarget}
-                      onChange={(event) => setSelectedTarget(Number(event.target.value))}
-                    >
-                      {transferTargets.map((target) => (
-                        <option key={target.id} value={target.id}>
-                          {target.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      className="btn-ghost w-full justify-center"
-                      disabled={pending}
-                      onClick={handleTransfer}
-                    >
-                      {transfer.isPending ? (
-                        <Loader2 size={16} className="animate-spin" />
-                      ) : (
-                        <ArrowRightLeft size={16} />
-                      )}
-                      Discharge to {targetKind === "icu" ? "ICU" : "ward"} bed
-                    </button>
-                  </div>
-                ))}
-            </div>
-          ) : (
-            <>
-              <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-100">
-                This resource is committed. Releasing it returns it to <strong>available</strong> and
-                appends a release event to the audit trail. History is never deleted.
-              </div>
-              <button
-                className="btn-ghost w-full justify-center"
-                disabled={pending}
-                onClick={handleRelease}
-              >
-                {release.isPending ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <Unlock size={16} />
-                )}
-                Release resource
-              </button>
-            </>
-          )}
+            )}
+            <button
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+              disabled={pending}
+              onClick={handleRelease}
+            >
+              <Unlock size={15} /> Manual Release
+            </button>
+          </div>
         </div>
       )}
 
       {feedback && (
-        <p
+        <div
           className={cn(
-            "mt-4 flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm",
-            feedback.tone === "ok"
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-red-50 text-red-700",
+            "mt-4 rounded-xl px-4 py-3 text-sm",
+            feedback.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700",
           )}
         >
-          {feedback.tone === "ok" ? (
-            <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
-          ) : (
-            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-          )}
           {feedback.text}
-        </p>
-      )}
-
-      {historyPatientId != null && (
-        <button
-          className="mt-3 text-sm font-medium text-teal-600 hover:text-teal-700"
-          onClick={() => onViewPatient(historyPatientId)}
-        >
-          View {patientCode(historyPatientId)} history →
-        </button>
+        </div>
       )}
     </Modal>
   );

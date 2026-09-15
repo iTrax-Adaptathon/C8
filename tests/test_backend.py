@@ -351,3 +351,152 @@ def test_allocate_endpoint_returns_409_for_second_caller():
     )
     assert second.status_code == 409
     assert "committed" in second.json()["detail"].lower()
+
+
+# --------------------------------------------------------------- Ambulances & Reservations
+
+
+def test_ambulance_creation_and_capacity_check():
+    client = TestClient(app)
+    icu_id = make_resource("ICU B50", "bed")
+
+    # Create ambulance
+    payload = {
+        "ambulance_code": "A999",
+        "eta_minutes": 10,
+        "severity": "Critical",
+        "required_resource": "ICU Bed",
+        "patient_name": "Critical Cardiac Arrival",
+    }
+    resp = client.post("/ambulances", json=payload)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["ambulance_code"] == "A999"
+    assert data["status"] == "En Route"
+    amb_id = data["id"]
+
+    # Capacity check
+    check_resp = client.get(f"/ambulances/{amb_id}/capacity-check")
+    assert check_resp.status_code == 200
+    assert check_resp.json()["available"] is True
+
+    # Reserve bed for ambulance
+    reserve_resp = client.post(f"/ambulances/{amb_id}/reserve", json={"resource_id": icu_id})
+    assert reserve_resp.status_code == 200
+    assert reserve_resp.json()["reserved_resource_id"] == icu_id
+
+    # Check resource is now 'reserved'
+    res_resp = client.get(f"/resources/{icu_id}")
+    assert res_resp.json()["status"] == "reserved"
+
+    # Concurrent or second reservation should be rejected
+    db = SessionLocal()
+    try:
+        from backend.errors import ConflictError
+        p2_id = make_patient("Other Waiting", "bed")
+        with pytest.raises(ConflictError):
+            allocation_service.reserve(db, icu_id, p2_id)
+    finally:
+        db.close()
+
+    # Mark arrived
+    arrived_resp = client.post(f"/ambulances/{amb_id}/arrive")
+    assert arrived_resp.status_code == 200
+    assert arrived_resp.json()["status"] == "Arrived"
+
+
+def test_ambulance_cancel_releases_reservation():
+    client = TestClient(app)
+    ward_id = make_resource("Ward B99", "bed")
+
+    resp = client.post(
+        "/ambulances",
+        json={
+            "ambulance_code": "A888",
+            "eta_minutes": 15,
+            "severity": "Medium",
+            "required_resource": "Ward Bed",
+        },
+    )
+    amb_id = resp.json()["id"]
+
+    client.post(f"/ambulances/{amb_id}/reserve", json={"resource_id": ward_id})
+    assert client.get(f"/resources/{ward_id}").json()["status"] == "reserved"
+
+    # Cancel ambulance
+    cancel_resp = client.post(f"/ambulances/{amb_id}/cancel")
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["status"] == "Cancelled"
+
+    # Bed should now be released back to available
+    assert client.get(f"/resources/{ward_id}").json()["status"] == "available"
+
+
+def test_theatre_booking_conflict_prevention():
+    client = TestClient(app)
+    th_id = make_resource("Theatre T42", "theatre")
+    from datetime import datetime, timezone, timedelta
+
+    start = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
+    booking1 = {
+        "theatre_id": th_id,
+        "surgery_name": "Appendectomy",
+        "required_specialty": "General Surgery",
+        "start_time": start.isoformat(),
+        "duration_minutes": 60,
+    }
+    b1_resp = client.post("/theatres/bookings", json=booking1)
+    assert b1_resp.status_code == 201
+
+    # Attempt overlapping booking
+    overlapping = {
+        "theatre_id": th_id,
+        "surgery_name": "Emergency Hernia",
+        "required_specialty": "General Surgery",
+        "start_time": (start + timedelta(minutes=30)).isoformat(),
+        "duration_minutes": 60,
+    }
+    b2_resp = client.post("/theatres/bookings", json=overlapping)
+    assert b2_resp.status_code == 409
+    assert "conflict" in b2_resp.json()["detail"].lower()
+
+
+def test_discharge_pending_and_release():
+    client = TestClient(app)
+    bed_id = make_resource("Ward B88", "bed")
+    pat_id = make_patient("Patient Discharge Flow", "bed")
+
+    # Allocate
+    client.post(f"/resources/{bed_id}/allocate", json={"patient_id": pat_id})
+    assert client.get(f"/resources/{bed_id}").json()["status"] == "committed"
+
+    # Mark discharge pending
+    dp_resp = client.post(f"/patients/{pat_id}/discharge-pending")
+    assert dp_resp.status_code == 200
+    assert dp_resp.json()["status"] == "discharge_pending"
+    # Bed stays committed until actual discharge
+    assert client.get(f"/resources/{bed_id}").json()["status"] == "committed"
+
+    # Final discharge
+    dc_resp = client.post(f"/patients/{pat_id}/discharge")
+    assert dc_resp.status_code == 200
+    assert dc_resp.json()["status"] == "discharged"
+    # Bed is now released back to available
+    assert client.get(f"/resources/{bed_id}").json()["status"] == "available"
+
+
+def test_dashboard_summary_endpoint():
+    client = TestClient(app)
+    from seed import seed
+    seed()
+
+    resp = client.get("/dashboard/summary")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "beds_available" in data
+    assert "staff_available" in data
+    assert "ambulances_en_route" in data
+    assert "critical_bottlenecks" in data
+    assert "patient_flow" in data
+    assert len(data["incoming_ambulances"]) >= 1
+

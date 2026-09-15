@@ -32,7 +32,7 @@ def list_patients(db: Session, status: Optional[str] = None) -> List[Patient]:
     stmt = select(Patient)
     if status:
         stmt = stmt.where(Patient.status == status)
-    stmt = stmt.order_by(Patient.id.asc())
+    stmt = stmt.order_by(Patient.id.desc())
     return list(db.scalars(stmt))
 
 
@@ -43,21 +43,43 @@ def get_patient(db: Session, patient_id: int) -> Optional[Patient]:
 def get_by_current_resource(db: Session, resource_id: int) -> Optional[Patient]:
     stmt = select(Patient).where(
         Patient.current_resource_id == resource_id,
-        Patient.status == "admitted",
+        Patient.status.in_(["admitted", "discharge_pending"]),
+    )
+    return db.scalars(stmt).first()
+
+
+def get_by_reserved_resource(db: Session, resource_id: int) -> Optional[Patient]:
+    stmt = select(Patient).where(
+        Patient.current_resource_id == resource_id,
+        Patient.status == "reserved",
     )
     return db.scalars(stmt).first()
 
 
 def create_patient(
-    db: Session, name: str, resource_type_needed: str, urgency_score: int
+    db: Session,
+    name: str,
+    resource_type_needed: str,
+    urgency_score: int = 3,
+    severity: str = "Medium",
+    department: Optional[str] = None,
+    specialty_needed: Optional[str] = None,
+    ambulance_id: Optional[str] = None,
+    eta_minutes: Optional[int] = None,
+    status: str = "waiting",
 ) -> Patient:
     patient = Patient(
         name=name,
-        status="waiting",
+        status=status,
         resource_type_needed=resource_type_needed,
         urgency_score=urgency_score,
         waiting_since=utcnow(),
+        severity=severity,
+        department=department,
+        specialty_needed=specialty_needed,
+        ambulance_id=ambulance_id,
+        eta_minutes=eta_minutes,
     )
     db.add(patient)
-    db.flush()  # assign id without committing
+    db.flush()
     return patient

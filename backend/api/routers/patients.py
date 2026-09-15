@@ -1,17 +1,22 @@
-"""Patient endpoints: queue, intake, history, discharge."""
+"""Patient endpoints: queue, intake, history, status transitions, discharge."""
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.schemas.pydantic_schemas import EventOut, PatientCreate, PatientOut, TransferRequest
-from backend.services import patient_service
+from backend.schemas.pydantic_schemas import (
+    DischargeRequest,
+    EventOut,
+    PatientCreate,
+    PatientOut,
+    TransferRequest,
+)
+from backend.services import allocation_service, patient_service
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
 
-# NOTE: /waiting is declared before /{patient_id} so it is not captured as an id.
 @router.get("/waiting", response_model=List[PatientOut])
 def waiting_queue(db: Session = Depends(get_db)):
     return patient_service.list_waiting(db)
@@ -40,9 +45,28 @@ def patient_history(patient_id: int, db: Session = Depends(get_db)):
     return patient_service.get_history(db, patient_id)
 
 
+@router.post("/{patient_id}/discharge-pending", response_model=PatientOut)
+def mark_discharge_pending(
+    patient_id: int,
+    body: Optional[DischargeRequest] = None,
+    db: Session = Depends(get_db),
+):
+    staff_name = body.staff_name if body else None
+    reason = body.reason if body else None
+    return allocation_service.mark_discharge_pending(
+        db, patient_id, staff_name=staff_name, reason=reason
+    )
+
+
 @router.post("/{patient_id}/discharge", response_model=PatientOut)
-def discharge_patient(patient_id: int, db: Session = Depends(get_db)):
-    return patient_service.discharge(db, patient_id)
+def discharge_patient(
+    patient_id: int,
+    body: Optional[DischargeRequest] = None,
+    db: Session = Depends(get_db),
+):
+    staff_name = body.staff_name if body else None
+    reason = body.reason if body else None
+    return patient_service.discharge(db, patient_id, staff_name=staff_name, reason=reason)
 
 
 @router.post("/{patient_id}/transfer", response_model=PatientOut)

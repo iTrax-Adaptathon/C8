@@ -1,12 +1,16 @@
 import { AlertCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { AddAmbulanceModal } from "./components/AddAmbulanceModal";
 import { AddPatientModal } from "./components/AddPatientModal";
+import { AmbulanceView } from "./components/AmbulanceView";
+import { AuditFeed } from "./components/AuditFeed";
 import { HomeView } from "./components/HomeView";
 import { PatientsView } from "./components/PatientsView";
 import { PatientHistoryModal } from "./components/PatientHistoryModal";
 import { ResourceModal } from "./components/ResourceModal";
 import { StaffView } from "./components/StaffView";
+import { TheatreView } from "./components/TheatreView";
 import { TopNav, type PageKey } from "./components/TopNav";
 import {
   POLL_INTERVAL_MS,
@@ -30,6 +34,7 @@ export default function App() {
   const [historyPatientId, setHistoryPatientId] = useState<number | null>(null);
   const [selectedResourceId, setSelectedResourceId] = useState<number | null>(null);
   const [showAddPatient, setShowAddPatient] = useState(false);
+  const [showAddAmbulance, setShowAddAmbulance] = useState(false);
 
   useEffect(() => {
     if (!autoAllocate) return;
@@ -54,6 +59,8 @@ export default function App() {
         onNavigate={setPage}
         autoAllocate={autoAllocate}
         onAutoAllocateChange={setAutoAllocate}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       <main className="mx-auto max-w-[1440px] px-5 py-6 sm:px-6">
@@ -72,10 +79,14 @@ export default function App() {
 
         {page === "home" && (
           <HomeView
+            onNavigateTab={(tab) => setPage(tab as PageKey)}
             onViewPatient={setHistoryPatientId}
             onAddPatient={() => setShowAddPatient(true)}
-            onSelectResource={setSelectedResourceId}
+            onAddAmbulance={() => setShowAddAmbulance(true)}
           />
+        )}
+        {page === "ambulances" && (
+          <AmbulanceView onAddAmbulance={() => setShowAddAmbulance(true)} />
         )}
         {page === "patients" && (
           <PatientsView
@@ -83,7 +94,9 @@ export default function App() {
             onAddPatient={() => setShowAddPatient(true)}
           />
         )}
+        {page === "theatres" && <TheatreView />}
         {page === "staff" && <StaffView onSelect={setSelectedResourceId} />}
+        {page === "audit" && <AuditFeed />}
       </main>
 
       <ResourceModal
@@ -106,6 +119,11 @@ export default function App() {
         autoAllocate={autoAllocate}
         onClose={() => setShowAddPatient(false)}
         onCreated={(patientId) => setHistoryPatientId(patientId)}
+      />
+
+      <AddAmbulanceModal
+        isOpen={showAddAmbulance}
+        onClose={() => setShowAddAmbulance(false)}
       />
     </div>
   );

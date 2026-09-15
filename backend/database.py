@@ -58,7 +58,10 @@ def drop_db() -> None:
     """Drop all tables (used by seed.py and tests)."""
     from backend.models import db_models  # noqa: F401
 
-    Base.metadata.drop_all(bind=engine)
+    with engine.begin() as conn:
+        conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        Base.metadata.drop_all(bind=conn)
+        conn.exec_driver_sql("PRAGMA foreign_keys=ON")
 
 
 def get_db():
