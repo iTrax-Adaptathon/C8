@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 
 export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "medflow-theme";
+const STORAGE_KEY = "helio-theme";
 
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "light";
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored === "light" || stored === "dark") return stored;
+  const legacyStored = window.localStorage.getItem("medflow-theme");
+  if (legacyStored === "light" || legacyStored === "dark") return legacyStored;
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 

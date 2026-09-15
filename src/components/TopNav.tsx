@@ -1,7 +1,8 @@
-import { Activity, Moon, Sun } from "lucide-react";
+import { LogOut, Moon, Sun } from "lucide-react";
 
 import { cn } from "../lib/utils";
 import type { Theme } from "../hooks/useTheme";
+import logo from "../logo.png";
 
 export type PageKey = "home" | "ambulances" | "patients" | "theatres" | "staff" | "audit";
 
@@ -21,6 +22,8 @@ export function TopNav({
   onAutoAllocateChange,
   theme,
   onToggleTheme,
+  userName,
+  onSignOut,
 }: {
   active: PageKey;
   onNavigate: (page: PageKey) => void;
@@ -28,16 +31,16 @@ export function TopNav({
   onAutoAllocateChange: (value: boolean) => void;
   theme: Theme;
   onToggleTheme: () => void;
+  userName: string;
+  onSignOut: () => void;
 }) {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur shadow-xs">
       <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-4 px-6">
         <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => onNavigate("home")}>
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white shadow-xs">
-            <Activity size={19} />
-          </div>
+          <img src={logo} alt="Helio" className="h-9 w-9 rounded-xl object-cover" />
           <div>
-            <span className="text-lg font-bold tracking-tight text-slate-900 leading-none">MedFlow</span>
+            <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white leading-none">Helio</span>
             <span className="hidden sm:inline-block ml-2 text-xs font-medium text-slate-400">Control Center</span>
           </div>
         </div>
@@ -95,6 +98,9 @@ export function TopNav({
             title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
           >
             {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+          <button className="icon-btn" onClick={onSignOut} title={`Sign out ${userName}`} aria-label="Sign out">
+            <LogOut size={17} />
           </button>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { AlertCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { AddAmbulanceModal } from "./components/AddAmbulanceModal";
+import { AuthScreen } from "./components/AuthScreen";
 import { AddPatientModal } from "./components/AddPatientModal";
 import { CapacityModal } from "./components/CapacityModal";
 import { AmbulanceView } from "./components/AmbulanceView";
@@ -29,6 +30,7 @@ export default function App() {
   const { data: patients = [] } = usePatients();
   const { mutate: autoAllocateQueue } = useAutoAllocateQueue();
   const { theme, toggleTheme } = useTheme();
+  const [userName, setUserName] = useState(() => window.localStorage.getItem("helio-session"));
 
   const [page, setPage] = useState<PageKey>("home");
   const [autoAllocate, setAutoAllocate] = useState(false);
@@ -54,8 +56,15 @@ export default function App() {
     [patients, historyPatientId],
   );
 
+  if (!userName) {
+    return <AuthScreen theme={theme} onToggleTheme={toggleTheme} onAuthenticated={(name) => {
+      window.localStorage.setItem("helio-session", name);
+      setUserName(name);
+    }} />;
+  }
+
   return (
-    <div className="min-h-screen bg-canvas">
+    <div className="min-h-screen bg-canvas text-ink">
       <TopNav
         active={page}
         onNavigate={setPage}
@@ -63,6 +72,11 @@ export default function App() {
         onAutoAllocateChange={setAutoAllocate}
         theme={theme}
         onToggleTheme={toggleTheme}
+        userName={userName}
+        onSignOut={() => {
+          window.localStorage.removeItem("helio-session");
+          setUserName(null);
+        }}
       />
 
       <main className="mx-auto max-w-[1440px] px-5 py-6 sm:px-6">
