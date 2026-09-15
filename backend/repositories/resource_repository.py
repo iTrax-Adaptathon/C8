@@ -12,14 +12,14 @@ from backend.models.db_models import Resource, utcnow
 
 
 def list_resources(db: Session, resource_type: Optional[str] = None) -> List[Resource]:
-    stmt = select(Resource)
+    stmt = select(Resource).where(Resource.active.is_(True))
     if resource_type:
         stmt = stmt.where(Resource.type == resource_type)
     return list(db.scalars(stmt.order_by(Resource.type, Resource.name)))
 
 
 def list_available(db: Session, resource_type: Optional[str] = None) -> List[Resource]:
-    stmt = select(Resource).where(Resource.status == "available")
+    stmt = select(Resource).where(Resource.active.is_(True), Resource.status == "available")
     if resource_type:
         stmt = stmt.where(Resource.type == resource_type)
     return list(db.scalars(stmt.order_by(Resource.type, Resource.name)))
@@ -28,7 +28,7 @@ def list_available(db: Session, resource_type: Optional[str] = None) -> List[Res
 def first_available(db: Session, resource_type: str) -> Optional[Resource]:
     stmt = (
         select(Resource)
-        .where(Resource.status == "available", Resource.type == resource_type)
+        .where(Resource.active.is_(True), Resource.status == "available", Resource.type == resource_type)
         .order_by(Resource.name)
         .limit(1)
     )
@@ -36,7 +36,8 @@ def first_available(db: Session, resource_type: str) -> Optional[Resource]:
 
 
 def get_resource(db: Session, resource_id: int) -> Optional[Resource]:
-    return db.get(Resource, resource_id)
+    resource = db.get(Resource, resource_id)
+    return resource if resource is not None and resource.active else None
 
 
 def try_reserve(db: Session, resource_id: int, patient_id: Optional[int] = None) -> bool:

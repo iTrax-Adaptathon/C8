@@ -127,6 +127,41 @@ def test_ambulance_keeps_patient_name_and_arrival_transition():
     assert waiting_event.new_state == "waiting"
 
 
+def test_capacity_can_add_and_remove_available_units():
+    client = TestClient(app)
+    response = client.post(
+        "/resources",
+        json={
+            "type": "staff",
+            "name": "ICU Nurse",
+            "quantity": 2,
+            "department": "Critical Care",
+            "role": "Nurse",
+        },
+    )
+    assert response.status_code == 201
+    created = response.json()
+    assert len(created) == 2
+    assert all(resource["status"] == "available" for resource in created)
+
+    removed = client.delete(f"/resources/{created[0]['id']}")
+    assert removed.status_code == 204
+    assert client.get(f"/resources/{created[0]['id']}").status_code == 404
+
+
+def test_capacity_cannot_remove_committed_unit():
+    resource_id = make_resource("Protected ICU Bed")
+    patient_id = make_patient("Protected Patient", "bed", urgency=8)
+    db = SessionLocal()
+    try:
+        allocation_service.allocate(db, resource_id, patient_id)
+    finally:
+        db.close()
+
+    response = TestClient(app).delete(f"/resources/{resource_id}")
+    assert response.status_code == 409
+
+
 # --------------------------------------------------------------- matching order
 
 

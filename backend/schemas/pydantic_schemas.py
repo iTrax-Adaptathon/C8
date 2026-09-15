@@ -23,6 +23,7 @@ class ResourceOut(BaseModel):
     status: str
     version: int
     updated_at: datetime
+    active: bool = True
     reserved_for_patient_id: Optional[int] = None
     department: Optional[str] = None
     specialty: Optional[str] = None
@@ -88,6 +89,16 @@ class EventOut(BaseModel):
 class ResourceStatusUpdate(BaseModel):
     status: ResourceStatus
     note: Optional[str] = None
+
+
+class ResourceCreate(BaseModel):
+    type: Literal["bed", "staff"]
+    name: str = Field(min_length=1, max_length=120)
+    quantity: int = Field(default=1, ge=1, le=50)
+    department: Optional[str] = None
+    specialty: Optional[str] = None
+    role: Optional[str] = None
+    shift: Optional[str] = None
 
 
 class AllocateRequest(BaseModel):

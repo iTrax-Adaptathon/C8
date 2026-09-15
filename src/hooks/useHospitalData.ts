@@ -9,6 +9,7 @@ import { api } from "../services/api";
 import type {
   NewAmbulanceInput,
   NewPatientInput,
+  NewResourceInput,
   NewTheatreBookingInput,
 } from "../types/hospital";
 
@@ -48,6 +49,22 @@ export function useResources(type?: string) {
     queryKey: ["resources", type],
     queryFn: () => api.getResources(type),
     refetchInterval: POLL_INTERVAL_MS,
+  });
+}
+
+export function useCreateResources() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: NewResourceInput) => api.createResources(input),
+    onSettled: () => invalidateAll(client),
+  });
+}
+
+export function useRemoveResource() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (resourceId: number) => api.removeResource(resourceId),
+    onSettled: () => invalidateAll(client),
   });
 }
 

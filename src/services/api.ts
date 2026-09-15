@@ -7,6 +7,7 @@ import type {
   MatchRecommendation,
   NewAmbulanceInput,
   NewPatientInput,
+  NewResourceInput,
   NewTheatreBookingInput,
   Patient,
   Resource,
@@ -58,6 +59,10 @@ export const api = {
   getResources: (type?: string) =>
     request<Resource[]>(`/resources${type ? `?type=${type}` : ""}`),
   getResource: (id: number) => request<Resource>(`/resources/${id}`),
+  createResources: (input: NewResourceInput) =>
+    request<Resource[]>("/resources", { method: "POST", body: JSON.stringify(input) }),
+  removeResource: (resourceId: number) =>
+    request<void>(`/resources/${resourceId}`, { method: "DELETE" }),
   reserveResource: (resourceId: number, patientId: number, staffName?: string, reason?: string) =>
     request<AllocationResult>(`/resources/${resourceId}/reserve`, {
       method: "POST",

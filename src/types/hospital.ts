@@ -19,6 +19,7 @@ export interface Resource {
   status: ResourceStatus;
   version: number;
   updated_at: string;
+  active?: boolean;
   reserved_for_patient_id?: number | null;
   department?: string | null;
   specialty?: string | null;
@@ -171,6 +172,16 @@ export interface NewPatientInput {
   ambulance_id?: string;
   eta_minutes?: number;
   estimated_treatment_minutes?: number;
+}
+
+export interface NewResourceInput {
+  type: "bed" | "staff";
+  name: string;
+  quantity: number;
+  department?: string;
+  specialty?: string;
+  role?: string;
+  shift?: string;
 }
 
 export interface NewAmbulanceInput {

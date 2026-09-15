@@ -12,6 +12,7 @@ from backend.schemas.pydantic_schemas import (
     PatientOut,
     ReserveRequest,
     ResourceOut,
+    ResourceCreate,
     ResourceStatusUpdate,
     StaffMemberOut,
     StaffUpdate,
@@ -27,6 +28,11 @@ def list_resources(type: Optional[str] = None, db: Session = Depends(get_db)):
         from backend.repositories import resource_repository as rr
         return rr.list_resources(db, resource_type=type)
     return resource_service.list_resources(db)
+
+
+@router.post("", response_model=List[ResourceOut], status_code=201)
+def create_resources(body: ResourceCreate, db: Session = Depends(get_db)):
+    return resource_service.create_resources(db, body)
 
 
 @router.get("/staff", response_model=List[StaffMemberOut])
@@ -75,6 +81,11 @@ def update_staff(staff_id: int, body: StaffUpdate, db: Session = Depends(get_db)
 @router.get("/{resource_id}", response_model=ResourceOut)
 def get_resource(resource_id: int, db: Session = Depends(get_db)):
     return resource_service.get_resource(db, resource_id)
+
+
+@router.delete("/{resource_id}", status_code=204)
+def remove_resource(resource_id: int, db: Session = Depends(get_db)):
+    resource_service.remove_resource(db, resource_id)
 
 
 @router.patch("/{resource_id}/status", response_model=ResourceOut)

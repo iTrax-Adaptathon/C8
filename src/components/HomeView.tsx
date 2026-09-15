@@ -21,11 +21,13 @@ export function HomeView({
   onViewPatient,
   onAddPatient,
   onAddAmbulance,
+  onManageCapacity,
 }: {
   onNavigateTab: (tab: string) => void;
   onViewPatient: (id: number) => void;
   onAddPatient: () => void;
   onAddAmbulance: () => void;
+  onManageCapacity: () => void;
 }) {
   const { data: summary, isLoading, isFetching, refetch } = useDashboardSummary();
 
@@ -73,6 +75,12 @@ export function HomeView({
           >
             <RefreshCw size={13} className={isFetching ? "animate-spin text-blue-600" : ""} />
             Refresh
+          </button>
+          <button
+            onClick={onManageCapacity}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            Manage Capacity
           </button>
           <button
             onClick={onAddAmbulance}

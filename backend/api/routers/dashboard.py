@@ -15,13 +15,13 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 @router.get("/summary", response_model=DashboardSummaryOut)
 def get_dashboard_summary(db: Session = Depends(get_db)):
     # 1. Beds summary
-    stmt_beds = select(Resource).where(Resource.type == "bed")
+    stmt_beds = select(Resource).where(Resource.active.is_(True), Resource.type == "bed")
     beds = list(db.scalars(stmt_beds))
     beds_total = len(beds)
     beds_available = sum(1 for b in beds if b.status == "available")
 
     # 2. Staff summary
-    stmt_staff = select(Resource).where(Resource.type == "staff")
+    stmt_staff = select(Resource).where(Resource.active.is_(True), Resource.type == "staff")
     staff_members = list(db.scalars(stmt_staff))
     staff_total = len(staff_members)
     staff_available = sum(

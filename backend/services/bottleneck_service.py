@@ -30,7 +30,7 @@ def detect_bottlenecks(db: Session) -> List[BottleneckOut]:
         )
 
     # 2. Bed Capacity: ICU and Emergency/Ward
-    stmt_beds = select(Resource).where(Resource.type == "bed")
+    stmt_beds = select(Resource).where(Resource.active.is_(True), Resource.type == "bed")
     all_beds = list(db.scalars(stmt_beds))
     icu_beds = [b for b in all_beds if "ICU" in b.name or (b.department and "ICU" in b.department.upper())]
     icu_available = [b for b in icu_beds if b.status == "available"]
@@ -61,7 +61,7 @@ def detect_bottlenecks(db: Session) -> List[BottleneckOut]:
         )
 
     # 3. Staff Shortage / Qualification Check
-    stmt_staff = select(Resource).where(Resource.type == "staff")
+    stmt_staff = select(Resource).where(Resource.active.is_(True), Resource.type == "staff")
     all_staff = list(db.scalars(stmt_staff))
     avail_staff = [s for s in all_staff if getattr(s, "availability", "available") == "available" and s.status == "available"]
     
@@ -114,7 +114,7 @@ def detect_bottlenecks(db: Session) -> List[BottleneckOut]:
             )
 
     # 5. Theatre Schedule Conflicts / Capacity
-    stmt_theatres = select(Resource).where(Resource.type == "theatre")
+    stmt_theatres = select(Resource).where(Resource.active.is_(True), Resource.type == "theatre")
     theatres = list(db.scalars(stmt_theatres))
     avail_theatres = [t for t in theatres if t.status == "available"]
     theatre_waiting = [p for p in active_patients if p.resource_type_needed == "theatre"]

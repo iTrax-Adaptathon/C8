@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { AddAmbulanceModal } from "./components/AddAmbulanceModal";
 import { AddPatientModal } from "./components/AddPatientModal";
+import { CapacityModal } from "./components/CapacityModal";
 import { AmbulanceView } from "./components/AmbulanceView";
 import { AuditFeed } from "./components/AuditFeed";
 import { HomeView } from "./components/HomeView";
@@ -35,6 +36,7 @@ export default function App() {
   const [selectedResourceId, setSelectedResourceId] = useState<number | null>(null);
   const [showAddPatient, setShowAddPatient] = useState(false);
   const [showAddAmbulance, setShowAddAmbulance] = useState(false);
+  const [showCapacity, setShowCapacity] = useState(false);
 
   useEffect(() => {
     if (!autoAllocate) return;
@@ -83,6 +85,7 @@ export default function App() {
             onViewPatient={setHistoryPatientId}
             onAddPatient={() => setShowAddPatient(true)}
             onAddAmbulance={() => setShowAddAmbulance(true)}
+            onManageCapacity={() => setShowCapacity(true)}
           />
         )}
         {page === "ambulances" && (
@@ -124,6 +127,12 @@ export default function App() {
       <AddAmbulanceModal
         isOpen={showAddAmbulance}
         onClose={() => setShowAddAmbulance(false)}
+      />
+
+      <CapacityModal
+        open={showCapacity}
+        resources={resources}
+        onClose={() => setShowCapacity(false)}
       />
     </div>
   );

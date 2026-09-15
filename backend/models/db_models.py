@@ -8,7 +8,7 @@ events           -> insert-only audit trail (never updated or deleted)
 """
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 
 from backend.database import Base
 
@@ -31,6 +31,7 @@ class Resource(Base):
     status = Column(String, nullable=False, default="available", index=True)  # available | reserved | committed
     version = Column(Integer, nullable=False, default=0)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    active = Column(Boolean, nullable=False, default=True)
 
     # Enhanced fields for clinical patient-flow & reservations
     reserved_for_patient_id = Column(Integer, nullable=True)

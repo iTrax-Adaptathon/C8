@@ -9,6 +9,59 @@ from backend.repositories import event_repository as event_repo
 from backend.repositories import patient_repository as patient_repo
 from backend.repositories import resource_repository as resource_repo
 from backend.services import matching_service
+from backend.models.db_models import Resource
+
+
+def create_resources(db: Session, data):
+    """Add capacity units without changing existing allocations."""
+    resources = []
+    for index in range(data.quantity):
+        name = data.name.strip() if data.quantity == 1 else f"{data.name.strip()} {index + 1}"
+        resource = Resource(
+            type=data.type,
+            name=name,
+            status="available",
+            department=data.department,
+            specialty=data.specialty,
+            role=data.role,
+            shift=data.shift,
+            availability="available" if data.type == "staff" else None,
+        )
+        db.add(resource)
+        resources.append(resource)
+    db.flush()
+    for resource in resources:
+        event_repo.add_event(
+            db,
+            "resource_created",
+            resource_id=resource.id,
+            actor="Capacity Manager",
+            reason=f"Added {data.type} capacity.",
+            note=f"{resource.name} added to available {data.type} capacity.",
+        )
+    db.commit()
+    for resource in resources:
+        db.refresh(resource)
+    return resources
+
+
+def remove_resource(db: Session, resource_id: int):
+    """Remove only unused capacity so active assignments cannot disappear."""
+    resource = get_resource(db, resource_id)
+    if resource.status != "available":
+        raise ConflictError(f"{resource.name} is {resource.status}; only available capacity can be removed.")
+    if patient_repo.get_by_current_resource(db, resource_id) is not None:
+        raise ConflictError(f"{resource.name} is assigned to a patient and cannot be removed.")
+    event_repo.add_event(
+        db,
+        "resource_removed",
+        resource_id=resource.id,
+        actor="Capacity Manager",
+        reason="Capacity reduced by operator.",
+        note=f"{resource.name} removed from available capacity.",
+    )
+    resource.active = False
+    db.commit()
 
 
 def list_resources(db: Session):

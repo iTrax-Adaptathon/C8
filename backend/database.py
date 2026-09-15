@@ -64,6 +64,7 @@ def _upgrade_existing_schema() -> None:
             "created_at": "DATETIME",
             "updated_at": "DATETIME",
         },
+        "resources": {"active": "BOOLEAN DEFAULT 1"},
         "ambulances": {"patient_name": "VARCHAR(120)"},
         "events": {
             "previous_state": "VARCHAR(80)",
