@@ -10,6 +10,7 @@ from backend.repositories import event_repository as event_repo
 from backend.repositories import resource_repository as resource_repo
 from backend.schemas.pydantic_schemas import AmbulanceCreate
 from backend.services import allocation_service
+from backend.services import patient_service
 
 
 def list_ambulances(db: Session, status: Optional[str] = None) -> List[Ambulance]:
@@ -90,6 +91,7 @@ def create_ambulance(db: Session, data: AmbulanceCreate) -> Ambulance:
 
     ambulance = Ambulance(
         ambulance_code=data.ambulance_code,
+        patient_name=patient_name,
         eta_minutes=data.eta_minutes,
         severity=data.severity,
         required_resource=data.required_resource,
@@ -146,11 +148,23 @@ def mark_arrived(db: Session, ambulance_id: int) -> Ambulance:
     if ambulance.patient_id:
         patient = db.get(Patient, ambulance.patient_id)
         if patient:
-            # If patient had a reserved resource, keep it as reserved, else waiting
-            if patient.current_resource_id and patient.status == "reserved":
-                patient.status = "reserved"
-            else:
-                patient.status = "waiting"
+            if patient.status == "en_route":
+                patient_service.update_status(
+                    db, patient.id, "arrived", staff_name="Ambulance Desk",
+                    reason=f"Ambulance {ambulance.ambulance_code} arrived.",
+                    commit=False,
+                )
+                patient_service.update_status(
+                    db, patient.id, "waiting", staff_name="Ambulance Desk",
+                    reason=f"Ambulance {ambulance.ambulance_code} arrived at hospital.",
+                    commit=False,
+                )
+                if patient.current_resource_id:
+                    patient_service.update_status(
+                        db, patient.id, "reserved", staff_name="Matching Engine",
+                        reason=f"Existing reservation retained for {ambulance.ambulance_code}.",
+                        commit=False,
+                    )
             event_repo.add_event(
                 db,
                 "ambulance_arrived",
@@ -186,7 +200,11 @@ def cancel_ambulance(db: Session, ambulance_id: int, reason: Optional[str] = Non
     if ambulance.patient_id:
         patient = db.get(Patient, ambulance.patient_id)
         if patient and patient.status in ["en_route", "reserved", "waiting"]:
-            patient.status = "discharged"
+            patient_service.update_status(
+                db, patient.id, "discharged", staff_name="Ambulance Desk",
+                reason=f"Ambulance {ambulance.ambulance_code} cancelled.",
+                commit=False,
+            )
             patient.current_resource_id = None
 
     event_repo.add_event(

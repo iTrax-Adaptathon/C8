@@ -272,13 +272,15 @@ def mark_discharge_pending(
     if patient.status != "admitted":
         raise ConflictError(f"{patient.name} is '{patient.status}', not admitted.")
 
-    patient.status = "discharge_pending"
-    event_repo.add_event(
+    from backend.services import patient_service
+
+    patient_service.transition_patient(
         db,
+        patient_id,
         "discharge_pending",
-        patient_id=patient.id,
-        resource_id=patient.current_resource_id,
-        note=reason or f"Discharge planning started for {patient.name}.",
+        staff_name=staff_name,
+        reason=reason or f"Discharge planning started for {patient.name}.",
+        commit=False,
     )
     db.commit()
     db.refresh(patient)

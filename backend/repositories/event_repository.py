@@ -17,12 +17,21 @@ def add_event(
     patient_id: Optional[int] = None,
     resource_id: Optional[int] = None,
     note: Optional[str] = None,
+    previous_state: Optional[str] = None,
+    new_state: Optional[str] = None,
+    actor: Optional[str] = None,
+    reason: Optional[str] = None,
 ) -> Event:
     event = Event(
         patient_id=patient_id,
         resource_id=resource_id,
         event_type=event_type,
+        staff_name=actor,
+        reason=reason,
         note=note,
+        previous_state=previous_state,
+        new_state=new_state,
+        actor=actor,
     )
     db.add(event)
     return event

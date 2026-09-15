@@ -66,10 +66,13 @@ def create_patient(
     specialty_needed: Optional[str] = None,
     ambulance_id: Optional[str] = None,
     eta_minutes: Optional[int] = None,
+    age: Optional[int] = None,
+    estimated_treatment_minutes: Optional[int] = None,
     status: str = "waiting",
 ) -> Patient:
     patient = Patient(
         name=name,
+        age=age,
         status=status,
         resource_type_needed=resource_type_needed,
         urgency_score=urgency_score,
@@ -79,6 +82,7 @@ def create_patient(
         specialty_needed=specialty_needed,
         ambulance_id=ambulance_id,
         eta_minutes=eta_minutes,
+        estimated_treatment_minutes=estimated_treatment_minutes,
     )
     db.add(patient)
     db.flush()

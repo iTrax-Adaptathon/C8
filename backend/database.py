@@ -7,7 +7,7 @@ reads (polling dashboard) never block a concurrent allocation write.
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 try:  # optional: pick up HOSPITAL_DB_PATH / DATABASE_URL from a local .env
@@ -52,6 +52,36 @@ def init_db() -> None:
     from backend.models import db_models  # noqa: F401  (register mappings)
 
     Base.metadata.create_all(bind=engine)
+    _upgrade_existing_schema()
+
+
+def _upgrade_existing_schema() -> None:
+    """Add fields introduced after the original MVP without replacing user data."""
+    additions = {
+        "patients": {
+            "age": "INTEGER",
+            "estimated_treatment_minutes": "INTEGER",
+            "created_at": "DATETIME",
+            "updated_at": "DATETIME",
+        },
+        "ambulances": {"patient_name": "VARCHAR(120)"},
+        "events": {
+            "previous_state": "VARCHAR(80)",
+            "new_state": "VARCHAR(80)",
+            "actor": "VARCHAR(120)",
+        },
+    }
+    with engine.begin() as conn:
+        inspector = inspect(conn)
+        for table, columns in additions.items():
+            existing = {column["name"] for column in inspector.get_columns(table)}
+            for name, definition in columns.items():
+                if name not in existing:
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN "{name}" {definition}'))
+                    if table == "patients" and name in {"created_at", "updated_at"}:
+                        conn.execute(
+                            text(f'UPDATE patients SET "{name}" = CURRENT_TIMESTAMP WHERE "{name}" IS NULL')
+                        )
 
 
 def drop_db() -> None:

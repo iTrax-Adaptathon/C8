@@ -34,6 +34,7 @@ class ResourceOut(BaseModel):
 
 class PatientCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
+    age: Optional[int] = Field(default=None, ge=0, le=130)
     resource_type_needed: ResourceType
     urgency_score: int = Field(default=3, ge=1, le=10)
     severity: Optional[SeverityLevel] = "Medium"
@@ -41,7 +42,8 @@ class PatientCreate(BaseModel):
     specialty_needed: Optional[str] = None
     ambulance_id: Optional[str] = None
     eta_minutes: Optional[int] = None
-    status: Optional[str] = "waiting"
+    estimated_treatment_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
+    status: Optional[PatientStatus] = "waiting"
 
 
 class PatientOut(BaseModel):
@@ -49,6 +51,7 @@ class PatientOut(BaseModel):
 
     id: int
     name: str
+    age: Optional[int] = None
     status: str
     resource_type_needed: str
     urgency_score: int
@@ -60,6 +63,9 @@ class PatientOut(BaseModel):
     assigned_staff_id: Optional[int] = None
     ambulance_id: Optional[str] = None
     eta_minutes: Optional[int] = None
+    estimated_treatment_minutes: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     waiting_minutes: Optional[int] = 0
 
 
@@ -73,6 +79,9 @@ class EventOut(BaseModel):
     staff_name: Optional[str] = None
     reason: Optional[str] = None
     note: Optional[str] = None
+    previous_state: Optional[str] = None
+    new_state: Optional[str] = None
+    actor: Optional[str] = None
     created_at: datetime
 
 
@@ -147,6 +156,7 @@ class AmbulanceOut(BaseModel):
 
     id: int
     ambulance_code: str
+    patient_name: Optional[str] = None
     eta_minutes: int
     severity: str
     required_resource: str

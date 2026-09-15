@@ -63,6 +63,70 @@ def test_health_and_seed_reset():
     assert len(client.get("/patients/waiting").json()) == 7
 
 
+def test_patient_extended_fields_and_transition_audit():
+    db = SessionLocal()
+    try:
+        patient = patient_service.create_patient(
+            db,
+            PatientCreate(
+                name="Extended Patient",
+                age=42,
+                resource_type_needed="bed",
+                urgency_score=8,
+                estimated_treatment_minutes=90,
+            ),
+        )
+        patient_service.update_status(
+            db, patient.id, "discharged", staff_name="Discharge Desk", reason="Transferred home"
+        )
+        refreshed = patient_service.get_patient(db, patient.id)
+        history = patient_service.get_history(db, patient.id)
+    finally:
+        db.close()
+
+    assert refreshed.age == 42
+    assert refreshed.estimated_treatment_minutes == 90
+    discharge_event = next(event for event in history if event.event_type == "patient_discharged")
+    assert discharge_event.previous_state == "waiting"
+    assert discharge_event.new_state == "discharged"
+    assert discharge_event.actor == "Discharge Desk"
+
+
+def test_ambulance_keeps_patient_name_and_arrival_transition():
+    client = TestClient(app)
+    response = client.post(
+        "/ambulances",
+        json={
+            "ambulance_code": "A901",
+            "patient_name": "Incoming Patient",
+            "eta_minutes": 8,
+            "severity": "Critical",
+            "required_resource": "ICU Bed",
+        },
+    )
+    assert response.status_code == 201
+    ambulance = response.json()
+    assert ambulance["patient_name"] == "Incoming Patient"
+
+    arrived = client.post(f"/ambulances/{ambulance['id']}/arrive")
+    assert arrived.status_code == 200
+
+    db = SessionLocal()
+    try:
+        patient = patient_service.get_patient(db, ambulance["patient_id"])
+        history = patient_service.get_history(db, patient.id)
+    finally:
+        db.close()
+
+    assert patient.status == "waiting"
+    arrived_event = next(event for event in history if event.event_type == "patient_arrived")
+    waiting_event = next(event for event in history if event.event_type == "patient_waiting")
+    assert arrived_event.previous_state == "en_route"
+    assert arrived_event.new_state == "arrived"
+    assert waiting_event.previous_state == "arrived"
+    assert waiting_event.new_state == "waiting"
+
+
 # --------------------------------------------------------------- matching order
 
 

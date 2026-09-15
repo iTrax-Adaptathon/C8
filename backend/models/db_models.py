@@ -49,6 +49,7 @@ class Patient(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
+    age = Column(Integer, nullable=True)
     # en_route | arrived | waiting | reserved | admitted | discharge_pending | discharged
     status = Column(String, nullable=False, default="waiting", index=True)
     resource_type_needed = Column(String, nullable=False)  # bed | theatre | staff
@@ -65,6 +66,9 @@ class Patient(Base):
     assigned_staff_id = Column(Integer, ForeignKey("resources.id"), nullable=True)
     ambulance_id = Column(String, nullable=True)
     eta_minutes = Column(Integer, nullable=True)
+    estimated_treatment_minutes = Column(Integer, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
 
 class Ambulance(Base):
@@ -72,6 +76,7 @@ class Ambulance(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     ambulance_code = Column(String, nullable=False, unique=True, index=True)  # e.g. A102
+    patient_name = Column(String, nullable=True)
     eta_minutes = Column(Integer, nullable=False)
     severity = Column(String, nullable=False)  # Critical | High | Medium | Low
     required_resource = Column(String, nullable=False)  # ICU Bed | Emergency Bed | Ward Bed | Theatre
@@ -108,4 +113,7 @@ class Event(Base):
     staff_name = Column(String, nullable=True)
     reason = Column(String, nullable=True)
     note = Column(String, nullable=True)
+    previous_state = Column(String, nullable=True)
+    new_state = Column(String, nullable=True)
+    actor = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow, index=True)

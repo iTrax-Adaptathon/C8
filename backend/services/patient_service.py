@@ -19,6 +19,7 @@ def create_patient(db: Session, data: PatientCreate):
     patient = patient_repo.create_patient(
         db,
         name=data.name.strip(),
+        age=data.age,
         resource_type_needed=data.resource_type_needed,
         urgency_score=data.urgency_score,
         severity=data.severity or "Medium",
@@ -26,6 +27,7 @@ def create_patient(db: Session, data: PatientCreate):
         specialty_needed=data.specialty_needed,
         ambulance_id=data.ambulance_id,
         eta_minutes=data.eta_minutes,
+        estimated_treatment_minutes=data.estimated_treatment_minutes,
         status=status,
     )
     event_repo.add_event(
@@ -80,12 +82,13 @@ def get_history(db: Session, patient_id: int):
     return event_repo.list_for_patient(db, patient_id)
 
 
-def update_status(
+def transition_patient(
     db: Session,
     patient_id: int,
     new_status: str,
     staff_name: Optional[str] = None,
     reason: Optional[str] = None,
+    commit: bool = True,
 ):
     patient = get_patient(db, patient_id)
     try:
@@ -100,11 +103,34 @@ def update_status(
         f"patient_{new_status}",
         patient_id=patient.id,
         resource_id=patient.current_resource_id,
+        previous_state=old_status,
+        new_state=new_status,
+        actor=staff_name or "Care Team",
+        reason=reason,
         note=reason or f"Patient status changed from {old_status} to {new_status}.",
     )
-    db.commit()
-    db.refresh(patient)
+    if commit:
+        db.commit()
+        db.refresh(patient)
     return patient
+
+
+def update_status(
+    db: Session,
+    patient_id: int,
+    new_status: str,
+    staff_name: Optional[str] = None,
+    reason: Optional[str] = None,
+    commit: bool = True,
+):
+    return transition_patient(
+        db,
+        patient_id,
+        new_status,
+        staff_name=staff_name,
+        reason=reason,
+        commit=commit,
+    )
 
 
 def discharge(
@@ -132,6 +158,8 @@ def discharge(
                 note=f"{resource.name} released on discharge of {patient.name}.",
             )
 
+    old_status = patient.status
+    assert_patient_transition(old_status, "discharged")
     patient.status = "discharged"
     patient.current_resource_id = None
     event_repo.add_event(
@@ -139,6 +167,10 @@ def discharge(
         "patient_discharged",
         patient_id=patient.id,
         resource_id=resource.id if resource else None,
+        previous_state=old_status,
+        new_state="discharged",
+        actor=staff_name or "Care Team",
+        reason=reason,
         note=reason or f"{patient.name} discharged.",
     )
     if resource is not None:

@@ -31,6 +31,7 @@ export interface Resource {
 export interface Patient {
   id: number;
   name: string;
+  age?: number | null;
   status: PatientStatus;
   resource_type_needed: ResourceType;
   urgency_score: number;
@@ -42,12 +43,16 @@ export interface Patient {
   assigned_staff_id?: number | null;
   ambulance_id?: string | null;
   eta_minutes?: number | null;
+  estimated_treatment_minutes?: number | null;
+  created_at?: string;
+  updated_at?: string;
   waiting_minutes?: number;
 }
 
 export interface Ambulance {
   id: number;
   ambulance_code: string;
+  patient_name?: string | null;
   eta_minutes: number;
   severity: SeverityLevel;
   required_resource: string;
@@ -120,6 +125,9 @@ export interface HospitalEvent {
   staff_name?: string | null;
   reason?: string | null;
   note: string | null;
+  previous_state?: string | null;
+  new_state?: string | null;
+  actor?: string | null;
   created_at: string;
 }
 
@@ -154,6 +162,7 @@ export interface AutoAllocateResult {
 
 export interface NewPatientInput {
   name: string;
+  age?: number;
   resource_type_needed: ResourceType;
   urgency_score: number;
   severity?: SeverityLevel;
@@ -161,6 +170,7 @@ export interface NewPatientInput {
   specialty_needed?: string;
   ambulance_id?: string;
   eta_minutes?: number;
+  estimated_treatment_minutes?: number;
 }
 
 export interface NewAmbulanceInput {
