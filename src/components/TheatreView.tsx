@@ -35,20 +35,37 @@ export function TheatreView() {
     return d.toISOString().slice(0, 16);
   });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const hasTheatres = theatres.length > 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    if (!theatreId) return;
+
+    if (!theatreId) {
+      setErrorMessage("Select a theatre suite before confirming the booking.");
+      return;
+    }
+
+    const trimmedSurgeryName = surgeryName.trim();
+    if (!trimmedSurgeryName) {
+      setErrorMessage("Enter a procedure name before confirming the booking.");
+      return;
+    }
+
+    const parsedDuration = Number(duration);
+    if (!Number.isFinite(parsedDuration) || parsedDuration < 15 || parsedDuration > 480) {
+      setErrorMessage("Duration must be between 15 and 480 minutes.");
+      return;
+    }
 
     createBooking(
       {
         theatre_id: theatreId,
-        surgery_name: surgeryName,
+        surgery_name: trimmedSurgeryName,
         required_specialty: specialty,
-        required_staff: staffRequired,
+        required_staff: staffRequired.trim() || "Surgical Team",
         start_time: new Date(startTime).toISOString(),
-        duration_minutes: Number(duration),
+        duration_minutes: parsedDuration,
       },
       {
         onSuccess: () => {
@@ -91,12 +108,19 @@ export function TheatreView() {
           </button>
           <button
             onClick={() => {
-              setTheatreId(theatres[0]?.id ?? null);
+              if (!hasTheatres) {
+                setErrorMessage("No theatre suites are available to schedule a procedure.");
+                return;
+              }
+
+              setTheatreId(theatres[0].id);
+              setErrorMessage(null);
               setShowModal(true);
             }}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+            disabled={!hasTheatres}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            <Plus size={14} /> Schedule Surgery
+            <Plus size={14} /> {hasTheatres ? "Schedule Surgery" : "No Theatres Available"}
           </button>
         </div>
       </div>
@@ -211,7 +235,13 @@ export function TheatreView() {
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-100">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-900">Schedule Surgical Procedure</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button
+                onClick={() => {
+                  setErrorMessage(null);
+                  setShowModal(false);
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
                 ✕
               </button>
             </div>
@@ -323,7 +353,10 @@ export function TheatreView() {
               <div className="mt-6 flex justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setErrorMessage(null);
+                    setShowModal(false);
+                  }}
                   className="rounded-lg border border-slate-200 px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
                 >
                   Cancel
