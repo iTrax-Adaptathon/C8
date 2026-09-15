@@ -152,6 +152,10 @@ Set `CORS_ORIGINS` to the Vercel URL, for example
 Render persistent disk or a managed database before production use because the
 default Render filesystem is ephemeral.
 
+If you create a Render Postgres database, connect it to the backend service with
+the database's **internal URL** as `DATABASE_URL`. The internal URL is for the
+Render backend only and must not be placed in Vercel or exposed in frontend code.
+
 ### Vercel (React frontend)
 
 Import this repository into Vercel. The included `vercel.json` configures the

@@ -24,16 +24,23 @@ DEFAULT_DB_PATH = BASE_DIR / "hospital.db"
 DB_PATH = os.getenv("HOSPITAL_DB_PATH", str(DEFAULT_DB_PATH))
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False, "timeout": 30},
-    future=True,
-)
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+engine_kwargs = {"future": True}
+if DATABASE_URL.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 
 
 @event.listens_for(engine, "connect")
 def _set_sqlite_pragma(dbapi_connection, _connection_record):
     """Enable WAL, foreign keys and a busy timeout on every connection."""
+    if engine.dialect.name != "sqlite":
+        return
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA foreign_keys=ON")
@@ -73,6 +80,8 @@ def _upgrade_existing_schema() -> None:
         },
     }
     with engine.begin() as conn:
+        if engine.dialect.name != "sqlite":
+            additions["resources"]["active"] = "BOOLEAN DEFAULT TRUE"
         inspector = inspect(conn)
         for table, columns in additions.items():
             existing = {column["name"] for column in inspector.get_columns(table)}
@@ -90,9 +99,11 @@ def drop_db() -> None:
     from backend.models import db_models  # noqa: F401
 
     with engine.begin() as conn:
-        conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        if engine.dialect.name == "sqlite":
+            conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
         Base.metadata.drop_all(bind=conn)
-        conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+        if engine.dialect.name == "sqlite":
+            conn.exec_driver_sql("PRAGMA foreign_keys=ON")
 
 
 def get_db():
