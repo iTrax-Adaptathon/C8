@@ -134,6 +134,33 @@ npm install
 
 ## Running the app
 
+## Deploying Web + API
+
+The web dashboard and API can be deployed separately:
+
+### Render (FastAPI backend)
+
+This repository includes `render.yaml`. In Render, create a Blueprint from the
+repository or create a Python web service with:
+
+- Build command: `pip install -r requirements.txt`
+- Start command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+- Health check path: `/health`
+
+Set `CORS_ORIGINS` to the Vercel URL, for example
+`https://your-dashboard.vercel.app`. SQLite is suitable for a prototype; use a
+Render persistent disk or a managed database before production use because the
+default Render filesystem is ephemeral.
+
+### Vercel (React frontend)
+
+Import this repository into Vercel. The included `vercel.json` configures the
+Vite build and SPA fallback. Add this environment variable in Vercel:
+
+`VITE_API_URL=https://your-api.onrender.com`
+
+The existing local fallback remains `http://127.0.0.1:8000` for development.
+
 ### One command (backend + Vite + Electron)
 
 ```powershell
